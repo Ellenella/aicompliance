@@ -143,10 +143,8 @@ def main():
                     use_container_width=True
                 )
                 
-                if st.checkbox("Enable GDPR Anonymization"):
-                    st.session_state.results["text"] = st.session_state.results["text"].apply(
-                        GDPRHandler.anonymize
-                    )
+                if if "results" in st.session_state and st.checkbox("Enable GDPR Anonymization"):
+                    st.session_state.results["text"] = st.session_state.results["text"].apply(GDPRHandler.anonymize)
                 
                 export_format = st.selectbox("Export format:", ["CSV"])
                 if export_format == "CSV":
