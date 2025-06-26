@@ -24,6 +24,15 @@ def load_regulations():
     with open("assets/eu_regulations.md", "r") as f:
         return f.read()
 
+import numpy as np
+
+def get_bias_score(text):
+    bias_scores = detector.analyze_bias(text)
+    if bias_scores:  # non-empty dict evaluates True
+        return np.mean(list(bias_scores.values()))
+    else:
+        return 0
+    
 def show_compliance_guidelines():
     with st.expander("📜 EU Compliance Guidelines", expanded=False):
         st.markdown(load_regulations())
@@ -34,11 +43,10 @@ def analyze_content(content, detector):
     content["toxicity_score"] = content["text"].apply(detector.check_toxicity)
     content["pii_detected"] = content["text"].apply(detector.find_pii)
     content["bias_score"] = content["text"].apply(
-    lambda t: np.mean(list(detector.analyze_bias(t).values())) if detector.analyze_bias(t) else 0
+    lambda t: (lambda scores: np.mean(list(scores.values())) if scores else 0)(detector.analyze_bias(t))
 )
     results = calculate_compliance_score(content)
-    st.write("Sample compliance_score:", results["compliance_score"].iloc[0])
-    st.write("Type of compliance_score:", type(results["compliance_score"].iloc[0]))
+    st.write("Sample compliance_score:", results["compliance_score"].iloc[0])   
     return results
 
 def main():
@@ -79,17 +87,28 @@ def main():
                 with st.spinner("Analyzing..."):
                     st.write("Analyzing content...")
                     st.session_state.results = analyze_content(content, detector)
-                    st.write("session started!")
+                    st.write("session started!", 
+                    st.session_state.results[
+                        ["text","toxicity_score","pii_detected","bias_score","compliance_score", "status", "gdpr_articles_violated"]
+                    ])
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Total Texts", len(st.session_state.results))
-                    st.write("totsal text", len(st.session_state.results))
-                    col2.metric("Compliant", 
-                                f"{len(st.session_state.results[st.session_state.results['status'] == 'Compliant'])}")
-                    col3.metric("High Risk", 
-                                  f"{len(st.session_state.results[st.session_state.results['risk_level'] == 'high'])}")
-                        
+                    col1.metric("Avg Score", f"{st.session_state.results['compliance_score'].mean():.1f}")
+                    
+                    # Visualizations
                     show_score_distribution(st.session_state.results)
-                    show_risk_categories(st.session_state.results)
+                    
+                    st.subheader("EU Regulatory Breakdown")
+                    col_left, col_right = st.columns(2)
+                    with col_left:
+                        show_risk_pie(st.session_state.results)
+                        st.markdown("**Risk Categories**: High, Medium, Low")
+                    
+                    st.warning("""
+                        **EU Compliance Notes**:  
+                        - Scores <50 require immediate review (GDPR Art.35)  
+                        - High-risk systems need DPIA documentation  
+                    """)
+                    
         
         if "results" in st.session_state:
             with tab2:
@@ -102,7 +121,15 @@ def main():
                         height=300
                     )
                 with col2:
-                    show_wordcloud(st.session_state.results)
+                    try:
+                        # Generate and display word cloud
+                        if text.strip():
+                            show_wordcloud(st.session_state.results)
+                        else:
+                            st.warning("No valid text available to generate a word cloud.")
+                    except Exception as e:
+                        st.error(f"The word cloud could not be generated because It needs more than one word: {str(e)}")
+                    
                     # show_pii_trend is not defined, so this line is commented out
                     # show_pii_trend(st.session_state.results)
             
@@ -110,7 +137,7 @@ def main():
                 st.subheader("Regulatory Compliance Details")
                 st.dataframe(
                     st.session_state.results[
-                        ["text", "status", "risk_level", "gdpr_articles_violated"]
+                        ["text","toxicity_score","pii_detected","bias_score","compliance_score", "status", "gdpr_articles_violated"]
                     ],
                     height=400,
                     use_container_width=True
@@ -121,7 +148,7 @@ def main():
                         GDPRHandler.anonymize
                     )
                 
-                export_format = st.selectbox("Export format:", ["CSV", "PDF"])
+                export_format = st.selectbox("Export format:", ["CSV"])
                 if export_format == "CSV":
                     csv = st.session_state.results.to_csv(index=False)
                     st.download_button("Download CSV", data=csv, file_name="report.csv")
