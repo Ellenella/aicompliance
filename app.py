@@ -7,7 +7,6 @@ from utils.gdpr_utils import GDPRHandler
 from utils.reporting import PDFReport
 from utils.visualizations import *
 import os
-
 # App Config
 st.set_page_config(
     page_title="AI Compliance Analyzer",
